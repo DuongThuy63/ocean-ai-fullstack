@@ -90,7 +90,7 @@ app.get('/api/oauth/google/callback', passport.authenticate('google', {
     maxAge: 5 * 24 * 60 * 60 * 1000
   });
 
-  res.redirect(`${process.env.CLIENT_URL}/success`);
+  res.json({ message: 'Login successful' });
 });
 
 // === LOGOUT ROUTE (optional) ===

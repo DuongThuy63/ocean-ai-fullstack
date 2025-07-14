@@ -1,3 +1,4 @@
+const { checkAuth } = require('../middleware/authMiddleware');
 const router = require('express').Router();
 const User = require('../models/userSchema');
 
@@ -25,10 +26,13 @@ router.post('/login', async (req, res) => {
   }
 });
 
+
 router.post('/logout', (req, res) => {
   req.session.destroy(() => {
     res.json({ message: 'Logged out' });
   });
 });
-
+router.get('/check', checkAuth, (req, res) => {
+  res.json({ user: req.user }); // ✅ Gửi lại user nếu token còn hiệu lực
+});
 module.exports = router;
