@@ -3,7 +3,7 @@ const SignInPage = () => {
   const handleGoogleSignIn = (e) => {
     e.preventDefault();
     // const callbackUrl ="/api/oauth/google";
-    const callbackUrl= "http://localhost:3000/api/oauth/google"
+    const callbackUrl = "https://ocean-ai-fullstack.onrender.com/api/oauth/google";
     window.open(callbackUrl, "_self");
   };
   
