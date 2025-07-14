@@ -1,0 +1,37 @@
+{
+  "name": "node_backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon index.js",
+    "seed": "node seed.js",
+    "create-admin": "node createAdmin.js",
+    "migrate-users": "node migrateUsers.js",
+    "manage-admins": "node manageAdmins.js",
+    "list-admins": "node manageAdmins.js list",
+    "list-users": "node manageAdmins.js users"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.0",
+    "express-session": "^1.18.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.15.1",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.15",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "validator": "^13.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

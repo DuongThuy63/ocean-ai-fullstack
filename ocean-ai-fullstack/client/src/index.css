@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+    min-height: 100vh;
+  }
+  
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+  }
+}
+
+.superlarge {
+  font-size: 10rem;
+  letter-spacing: -10px;
+}
+
+@media screen and (max-width: 768px) {
+  .superlarge {
+    font-size: 7rem;
+  }
+}
+
+@media screen and (max-width: 400px) {
+  .superlarge {
+    font-size: 5rem;
+  }
+}
+
+.logo-bg {
+  background: -webkit-linear-gradient(45deg, #fb923c, #ec4899, #9333ea);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.nav-name:hover {
+  background: white !important;
+  background-clip: padding-box !important;
+  -webkit-background-clip: padding-box !important;
+}
+
+.nav-name:hover span {
+  background: -webkit-linear-gradient(45deg, #fb923c, #ec4899, #9333ea) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+.dashboard-box {
+  border: 2px solid transparent;
+  background: transparent;
+  transition: all 0.3s ease;
+  padding: 16px;
+}
+
+.dashboard-box:hover {
+  background: white !important;
+  border: 2px solid white !important;
+  border-radius: 8px;
+}
+
+.dashboard-box:hover .dashboard-text {
+  background: -webkit-linear-gradient(45deg, #fb923c, #ec4899, #9333ea) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+.dashboard-text {
+  background: -webkit-linear-gradient(45deg, #fb923c, #ec4899, #9333ea);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transition: all 0.3s ease;
+}
