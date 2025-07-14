@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 
 // Models & Middleware
 const User = require('./models/userSchema');
+const Meet = require('./models/meetSchema');
 const { checkAuth } = require('./middleware/authMiddleware');
 
 // Routes
@@ -64,9 +65,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/admin', adminRoutes);
 
-// === HEALTH CHECK ===
-app.get('/api/health', (_, res) => res.send('✅ API running'));
-
 // === GOOGLE OAUTH ===
 app.get('/api/oauth/google', passport.authenticate('google', {
   scope: ['profile', 'email'],
@@ -93,6 +91,25 @@ app.get('/api/oauth/google/callback', passport.authenticate('google', {
   res.redirect(`${process.env.CLIENT_URL}/success`);
 });
 
+
+// === HEALTH CHECK ===
+app.get('/api/health', (_, res) => res.send('✅ API running'));
+
+app.get('/api/meet', checkAuth, async (req, res) => {
+  try {
+    const email = req.user.email; // ✅ Lấy email từ token
+    const meets = await Meet.find({
+      $or: [
+        { oceanAiEmail: email },
+        { blabberEmail: email }
+      ]
+    }).sort({ meetingStartTimeStamp: -1 });
+
+    res.json({ meetings: meets }); // ✅ Trả về dữ liệu thật
+  } catch (err) {
+    res.status(500).json({ message: "Error getting meetings", error: err.message });
+  }
+});
 // === LOGOUT ROUTE (optional) ===
 app.get('/api/logout', (req, res) => {
   res.clearCookie('token', {
@@ -102,14 +119,19 @@ app.get('/api/logout', (req, res) => {
   });
   res.redirect(`${process.env.CLIENT_URL}/logout-success`);
 });
-
-// === SERVE FRONTEND ===
+// ✅ CHẶN ROUTE API KHÔNG TỒN TẠI TRƯỚC KHI VÀO FRONTEND
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ message: 'API route not found' });
+});
+// === SERVE FRONTEND ===s
 const clientPath = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientPath));
+
+// ❗ Sau cùng: render frontend cho mọi route còn lại
 app.get('*', (req, res) => {
   res.sendFile(path.join(clientPath, 'index.html'));
 });
-
 app.listen(PORT, () => {
   console.log(`🚀 Server is running at http://localhost:${PORT}`);
 });
+

@@ -22,7 +22,7 @@ const Dashboard = () => {
 
         const data = await response.json();
         if (!response.ok) throw (data);
-        setMeets(data || []); // Assuming your API returns an array of meets
+        setMeets(data.meetings || []); // Assuming your API returns an array of meets
       } catch (error) {
         setError(error.message); // Set error message
       } finally {

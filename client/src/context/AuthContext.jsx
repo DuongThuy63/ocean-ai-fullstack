@@ -28,26 +28,28 @@ export const AuthContextProvider = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, { user: null, loading: true });
 
   const checkAuthFromCookie = async () => {
-    dispatch({ type: 'SET_LOADING' });
-    try {
-      const response = await fetch('/api/users/check', {
-        method: 'GET',
-        credentials: 'include',
-      });
+  dispatch({ type: 'SET_LOADING' });
+  try {
+    const response = await fetch('/api/auth/check', {
+      method: 'GET',
+      credentials: 'include',
+    });
 
-      if (!response.ok) throw new Error('Failed to fetch user');
+    console.log(">>> Response status:", response.status); // 👈 log thêm
+    const data = await response.json();
+    console.log(">>> Response data:", data);
 
-      const data = await response.json();
-      if (data.user) {
-        dispatch({ type: 'LOGIN', payload: data.user });
-      } else {
-        dispatch({ type: 'LOGOUT' });
-      }
-    } catch (error) {
-      console.error('Error fetching user:', error);
+    if (data.user) {
+      dispatch({ type: 'LOGIN', payload: data.user });
+    } else {
       dispatch({ type: 'LOGOUT' });
     }
-  };
+  } catch (error) {
+    console.error('🔥 Auth error:', error);
+    dispatch({ type: 'LOGOUT' });
+  }
+};
+
 
   // Gọi khi app lần đầu load
   useEffect(() => {
