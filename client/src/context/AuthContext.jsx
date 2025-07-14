@@ -1,4 +1,4 @@
-import  { createContext, useReducer, useContext, useEffect } from 'react';
+import { createContext, useReducer, useContext, useEffect } from 'react';
 import Loader from '../components/Loader';
 
 const AuthContext = createContext(undefined);
@@ -24,42 +24,38 @@ const reducer = (state, action) => {
   }
 };
 
-export const AuthContextProvider= ({ children }) => {
+export const AuthContextProvider = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, { user: null, loading: true });
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      dispatch({ type: 'SET_LOADING' });
-      try {
-        console.log("HAHAHAHHAHAHAHAHHA")
-        const response = await fetch('/api/users/check', {
-          method: 'GET',
-          credentials: 'include',
-        });
+  const checkAuthFromCookie = async () => {
+    dispatch({ type: 'SET_LOADING' });
+    try {
+      const response = await fetch('/api/users/check', {
+        method: 'GET',
+        credentials: 'include',
+      });
 
-        console.log(response)
-        if (!response.ok) {
-          throw new Error('Failed to fetch user');
-        }
+      if (!response.ok) throw new Error('Failed to fetch user');
 
-        const data = await response.json();
-        console.log(data)
-        if (data.user) {
-          dispatch({ type: 'LOGIN', payload: data.user });
-        } else {
-          dispatch({ type: 'LOGOUT' });
-        }
-      } catch (error) {
-        console.error('Error fetching user:', error);
+      const data = await response.json();
+      if (data.user) {
+        dispatch({ type: 'LOGIN', payload: data.user });
+      } else {
         dispatch({ type: 'LOGOUT' });
       }
-    };
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      dispatch({ type: 'LOGOUT' });
+    }
+  };
 
-    fetchUser();
+  // Gọi khi app lần đầu load
+  useEffect(() => {
+    checkAuthFromCookie();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ state, dispatch }}>
+    <AuthContext.Provider value={{ state, dispatch, checkAuthFromCookie }}>
       {state.loading ? <Loader /> : children}
     </AuthContext.Provider>
   );
