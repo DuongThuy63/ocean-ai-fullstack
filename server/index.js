@@ -1,112 +1,60 @@
-// Import necessary packages
-require('dotenv').config(); // Load environment variables
-console.log("======== ENV TEST ========");
-console.log("GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID);
-console.log("GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET);
-console.log("======== END TEST ========");
-// console.log("AI_SERVER_URL:", process.env.AI_SERVER_URL);
+require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const mongoose = require('mongoose');
 const morgan = require('morgan');
 const cors = require('cors');
-const Meet = require('./models/meetSchema');
-const User = require("./models/userSchema")
 const passport = require('passport');
-const { checkAuth } = require('./middleware/authMiddleware');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const jwt=require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const path = require('path');
-const { pipeline,Readable } = require('stream');
+const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const { Readable } = require('stream');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
+const Meet = require('./models/meetSchema');
+const User = require('./models/userSchema');
 const authRoutes = require('./routes/authRoutes');
 const planRoutes = require('./routes/planRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const { checkAuth } = require('./middleware/authMiddleware');
 
+const app = express();
+const PORT = process.env.PORT || 3000;
+const CLIENT_URL = process.env.CLIENT_URL;
+const MONGO_URI = process.env.MONGO_URI;
+const AI_SERVER_URL = process.env.AI_SERVER_URL;
 
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: "/api/oauth/google/callback",
-  scope:["profile","email"],
-  passReqToCallback:true
-},
-async function(request, accessToken, refreshToken, profile, done) { 
+  scope: ["profile", "email"],
+  passReqToCallback: true
+}, async function (req, accessToken, refreshToken, profile, done) {
   try {
-    const email = profile?.emails[0]?.value;
+    const email = profile?.emails?.[0]?.value;
     let user = await User.findOne({ email });
-    
-    if (!user) user = await User.create({ email, name: profile?.displayName });
-    return done(null, user); 
+    if (!user) user = await User.create({ email, name: profile.displayName });
+    return done(null, user);
   } catch (err) {
     return done(err, false);
   }
-} 
-));
+}));
 
-console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
-console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET);
-console.log('All environment variables:', Object.keys(process.env));
-console.log('dotenv loaded:', require('dotenv').config({ debug: true }));
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI;
-const AI_SERVER_URL = process.env.AI_SERVER_URL;
-let reportBuffer = []; // Buffer to store report data
-
-
-app.get('/', (req, res) => {
-  res.send('Node.js backend is running!');
-});
-
-// // // app.use(cors());
-// // app.use(cors({
-// //   origin: 'http://localhost:5173',
-// //   credentials: true
-// // }));
-
-// app.use(cors({
-//   origin: '*',
-//   credentials: true
-// }));
-
-// const allowedOrigins = [
-//   'http://localhost:5173',
-//   'chrome-extension://pkgiglhninikcahjlpcmcnlcmkijabfi'
-// ];
-
-
-// app.use(cors({
-//   origin: function(origin, callback) {
-//     // Cho phép các request không có origin (ví dụ Postman, server-to-server)
-//     if (!origin) return callback(null, true);
-
-//     if (allowedOrigins.indexOf(origin) === -1) {
-//       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-//       return callback(new Error(msg), false);
-//     }
-//     return callback(null, true);
-//   },
-//   credentials: true
-// }));
-
+// CORS setup
 app.use(cors({
-  origin: function(origin, callback) {
-    // ⚠️ Cho phép extension bất kỳ trong chế độ dev
-    if (!origin || origin.startsWith("chrome-extension://") || origin === "http://localhost:5173") {
-      return callback(null, true);
-    }
+  origin: function (origin, callback) {
+    const allowedOrigins = [CLIENT_URL, "chrome-extension://pkgiglhninikcahjlpcmcnlcmkijabfi"];
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error("Not allowed by CORS"), false);
   },
   credentials: true
 }));
 
-
-app.use(express.json({limit: '50mb'}));
-app.use(express.urlencoded({limit: '50mb'}));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan('dev'));
 app.use(cookieParser());
 app.use(session({
@@ -114,476 +62,192 @@ app.use(session({
   resave: false,
   saveUninitialized: false
 }));
-app.use(express.json());
 app.use(passport.initialize());
+
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/admin', adminRoutes);
 
-mongoose.connect(MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => console.log('Connected to MongoDB Atlas'))
-  .catch((err) => console.error('Error connecting to MongoDB Atlas:', err));
+// MongoDB connect
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ Connected to MongoDB Atlas'))
+  .catch(err => console.error('❌ MongoDB Error:', err));
 
-  app.post('/api/meet', async (req, res) => {
-    try {
-       console.log('Received /api/meet with body:', req.body);
-      const meetData = req.body;
-  
-      // Check if the user exists based on oceanAiEmail (or legacy field for backward compatibility)
-      const email = meetData?.oceanAiEmail;
-      console.log('Extracted email for user lookup:', email);
-      
-      // All fields should be using oceanAiEmail and oceanAiName consistently now
-      
-      const user = await User.findOne({ email });
-  
-      if (!user) {
-        console.log('User not found with email:', email);
-        throw new Error("This email isn't registered!");
-      }
-  
-      // Process screenshots if provided
-      const screenshots = meetData.screenshots
-        ?.filter(screenshot => screenshot.filename) // Filter out screenshots without a filename
-        .map(screenshot => ({
-          filename: screenshot.filename,
-          timestamp: screenshot.timestamp || new Date(), // Use provided timestamp or set to now
-          takenBy: screenshot.takenBy || email // Use oceanAiEmail if not provided
-        })) || [];
-  
-      // Create new Meet instance
-      const newMeet = new Meet({
-        ...meetData,
-        speakerDuration: new Map(Object.entries(meetData.speakerDuration)),
-        screenshots: screenshots
-      });
-  
-      // Save the meet
-      await newMeet.save();
-  
-      // Check if autoEnabled is true for the user
-      if (user.autoEnabled) {
-        const payload = { meeting_data: newMeet, report_format: 'pdf', report_type: 'normal' };
-  
-        // Call the AI server to generate the report
-        const response = await fetch(AI_SERVER_URL + '/report', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-  
-        if (response.ok) {
-        const reportBuffer = Buffer.from(await response.arrayBuffer());  
-          // Prepare email transporter
-          const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 587,
-            ignoreTLS: false,
-            secure: false,
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
-            }
-            });
-            
-  
-          // Send email with the report
-          await transporter.sendMail({
-            from: process.env.EMAIL_USER, // Sender email
-            to: email, // Send to the user
-            subject: `Your Report for ${newMeet.meetingTitle}`, // Email subject
-            text: 'Please find the attached report for your recent meet.', // Email body
-            attachments: [
-              {
-                filename: 'report.pdf', // Attachment filename
-                content: reportBuffer, // Attach the report as a buffer
-              },
-            ],
-          });
-  
-          console.log('Email with report sent to', email);
-        } else {
-          console.error('Failed to generate report:', response.statusText);
-        }
-      }
-  
-      res.status(201).json({ message: 'Meet created successfully!', meet: newMeet });
-    } catch (error) {
-      console.error('Error creating meet:', error);
-      res.status(500).json({ message: 'Error creating meet', error });
-    }
-  });
-  
+// --- API ROUTES ---
+
 app.get('/api/users/check', checkAuth, async (req, res) => {
-    try {
-        // console.log(req.user, req.cookies.token)
-      if (!req.user) {
-        res.status(401);
-        throw new Error('User is not authenticated');
-      }
-      
-      // console.log("USER ", req.user);
-      const email = req.user.email; // Assuming req.user contains an object with the email
-      const user = await User.findOne({ email });
-      // console.log("User: ", user);
-  
-      if (user) {
-        res.status(200).json({ 
-          user: { 
-            email: user.email, 
-            name: user.name,
-            role: user.role,
-            autoEnabled: user.autoEnabled
-          } 
-        }); // Return the user object with email
-        return;
-      }
-
-      if (!user) {
-        res.status(404);
-        throw new Error("User doesn't exist");
-      }
-
-      res.status(200).json({ 
-        user: { 
-          email: user.email, 
-          name: user.name,
-          role: user.role,
-          autoEnabled: user.autoEnabled
-        } 
-      });
-      
-    } catch (error) {
-      console.error('Error fetching user:', error);
-      res.status(500).json({ message: 'Internal server error', error: error.message });
-    }
-  });
-  
-
-app.get('/api/meet',checkAuth, async (req, res) => {
   try {
-    const email = req.user.email;
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ message: "User doesn't exist" });
+
+    res.json({
+      user: {
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        autoEnabled: user.autoEnabled
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.post('/api/meet', async (req, res) => {
+  try {
+    const meetData = req.body;
+    const email = meetData?.oceanAiEmail;
     const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    if(!user){
-        throw new Error("This email isn't registered!")
-    }
-    // console.log(user, email)
-    const meets = await Meet.find({ oceanAiEmail: email}).sort({ meetingStartTimeStamp: -1 });
-    if (meets.length === 0) {
-      return res.status(404).json({ message: 'No meets found for this email.' });
-    }
-    
-    res.json(meets);
-  } catch (error) {
-    console.error('Error fetching meets:', error);
-    res.status(500).json({ message: 'Error fetching meets', error });
-  }
-});
+    const screenshots = (meetData.screenshots || []).filter(s => s.filename).map(s => ({
+      filename: s.filename,
+      timestamp: s.timestamp || new Date(),
+      takenBy: s.takenBy || email
+    }));
 
-
-app.get("/api/oauth/login/success", async (req, res) => {
-    if (req.user) {
-        res.status(200).json({
-            error: false,
-            message: "Successfully Logged In",
-            user: req.user.email,
-        });
-    } else {
-        res.status(403).json({ error: true, message: "Not Authorized" });
-    }
-});
-
-app.get("/api/oauth/login/failed", async (req, res) => {
-    console.log("ERROR ")
-    res.status(401).json({
-        error: true,
-        message: "Login failure",
+    const newMeet = new Meet({
+      ...meetData,
+      speakerDuration: new Map(Object.entries(meetData.speakerDuration || {})),
+      screenshots
     });
-});
 
-app.get("/api/oauth/google", passport.authenticate("google",  { scope: ["profile", "email"], prompt: 'select_account' }));
+    await newMeet.save();
 
+    if (user.autoEnabled && AI_SERVER_URL) {
+      const payload = {
+        meeting_data: newMeet,
+        report_format: 'pdf',
+        report_type: 'normal'
+      };
 
-// Google OAuth callback URL
-app.get('/api/oauth/google/callback', passport.authenticate('google', { session: false, failureRedirect:`${process.env.CLIENT_URL}/failed`,prompt: 'select_account' }), (req, res) => {
-    console.log("HAHAHAHAH")
-  if (req.user) {
-    const user = req.user;
-    // console.log("USERRRR: ", user)
-    const token = jwt.sign({ email: user.email, name: user.name }, process.env.JWT_KEY, { expiresIn: '5d' });
-    // console.log("TOKEEEEN ", token)
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: false,
-      maxAge: 5 * 24 * 60 * 60 * 1000 
-    });
- 
-     res.redirect(`${process.env.CLIENT_URL}/success`);
-  } else {
-     res.redirect(`${process.env.CLIENT_URL}/failed`);
-  }
-});
-
-
-app.get("/api/oauth/logout", (req, res) => {
-    res.clearCookie('token', {
-        httpOnly: true,
-        secure: false,
-    });
-    res.redirect(process.env.CLIENT_URL);
-});
-
-app.post('/api/register-from-extension', async (req, res) => {
-  try {
-    const { email, name } = req.body;
-
-    if (!email || !name) {
-      return res.status(400).json({ message: 'Missing email or name' });
-    }
-
-    // Kiểm tra xem người dùng đã tồn tại chưa
-    let user = await User.findOne({ email });
-    if (!user) {
-      user = await User.create({ email, name });
-    }
-
-    res.status(200).json({ message: 'User registered successfully', user });
-  } catch (error) {
-    console.error('Error registering user:', error);
-    res.status(500).json({ message: 'Error registering user', error });
-  }
-});
-
-app.post('/api/upload-screenshot', (req, res) => {
-  const { filename, imageData, email } = req.body;
-
-  // Directory path based on oceanAiEmail
-  const directoryPath = path.join(__dirname, 'screenshots', email);
-
-  // Create directory if it doesn't exist
-  fs.mkdir(directoryPath, { recursive: true }, (err) => {
-      if (err) {
-          console.error('Error creating directory:', err);
-          return res.status(500).json({ error: 'Failed to create directory' });
-      }
-
-      // Write file to the directory
-      const filePath = path.join(directoryPath, filename);
-      const base64Data = imageData.split(',')[1]; // Remove the data URL prefix
-
-      fs.writeFile(filePath, base64Data, { encoding: 'base64' }, (err) => {
-          if (err) {
-              console.error('Error writing file:', err);
-              return res.status(500).json({ error: 'Failed to write file' });
-          }
-
-          console.log(`File saved: ${filePath}`);
-          res.status(200).json({ message: 'Screenshot uploaded successfully', filename });
+      const response = await fetch(`${AI_SERVER_URL}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-  });
+
+      if (response.ok) {
+        const reportBuffer = Buffer.from(await response.arrayBuffer());
+        const transporter = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+          }
+        });
+
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: `Your Report for ${newMeet.meetingTitle}`,
+          text: 'Please find the attached report.',
+          attachments: [{ filename: 'report.pdf', content: reportBuffer }]
+        });
+      }
+    }
+
+    res.status(201).json({ message: 'Meet created!', meet: newMeet });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Meet creation error', error: error.message });
+  }
 });
-
-
-// app.post('/api/get-report', checkAuth, async (req, res) => {
-//   const { meeting_id, meeting_title, report_format, report_type, report_interval, emails } = req.body;
-
-//   // Validate emails
-//   const validEmails = emails.filter(email => email && email.includes('@')); // Simple email validation
-
-//   // Find the meet based on the meeting_id
-//   const meet = await Meet.findById(meeting_id);
-//   const payload = { meeting_data: meet, report_format, report_type };
-//   if (report_interval) payload.report_interval = Number(report_interval);
-
-//   if (!meet) {
-//       return res.status(404).json({ message: 'Meet not found' });
-//   } else {
-//       meet.meetingTitle = meeting_title;
-//       await meet.save();
-//       console.log(meet);
-
-//       try {
-//           const response = await fetch(AI_SERVER_URL + '/report', {
-//               method: 'POST',
-//               headers: {
-//                   'Content-Type': 'application/json',
-//               },
-//               body: JSON.stringify(payload),
-//           });
-
-//           if (response.ok) {
-//               res.setHeader('Content-Disposition', response.headers.get('content-disposition'));
-//               res.setHeader('Content-Type', response.headers.get('content-type'));
-
-//               // Create a buffer to store the report data
-//               const reportBuffer = [];
-
-//               // Convert the fetch response.body (ReadableStream) into a Node.js Readable stream
-//               const nodeReadableStream = Readable.from(response.body);
-
-//               // Pipe the stream to the response for downloading
-//               nodeReadableStream.pipe(res);
-
-//               // Collect the data into the buffer for emailing
-//               nodeReadableStream.on('data', (chunk) => {
-//                   reportBuffer.push(chunk);
-//               });
-
-//               // Once the stream ends, send the email
-//               nodeReadableStream.on('end', async () => {
-//                   // Convert buffer to a single buffer
-//                   const reportData = Buffer.concat(reportBuffer);
-
-//                   // Prepare email transporter
-//                   const transporter = nodemailer.createTransport({
-//                     host: 'smtp.gmail.com',
-//                     port: 587,
-//                     ignoreTLS: false,
-//                     secure: false,
-//                     auth: {
-//                         user: process.env.EMAIL_USER,
-//                         pass: process.env.EMAIL_PASS
-//                     }
-//                     });
-
-//                   // Send email to each valid email address
-//                   for (const email of validEmails) {
-//                       await transporter.sendMail({
-//                           from: process.env.EMAIL_USER, // Sender address
-//                           to: email, // List of recipients
-//                           subject: `Your Report for ${meeting_title}`, // Subject line
-//                           text: 'Please find the attached report.', // Plain text body
-//                           attachments: [
-//                               {
-//                                   filename: `report.${report_format}`, 
-//                                   content: reportData,
-//                               },
-//                           ],
-//                       });
-//                   }
-//               });
-//           } else {
-//               res.status(response.status).json({ message: 'Failed to generate report', error: response.statusText });
-//           }
-//       } catch (error) {
-//           console.error('Error:', error);
-//           res.status(500).json({ message: 'Failed to generate report', error });
-//       }
-//   }
-// });
-
 
 app.post('/api/get-report', checkAuth, async (req, res) => {
   const { meeting_id, meeting_title, report_format, report_type, report_interval, emails } = req.body;
 
   try {
-    // Validate emails
-    const validEmails = (emails || []).filter(email => email && email.includes('@'));
-
-    // Find the meet based on the meeting_id
     const meet = await Meet.findById(meeting_id);
-    if (!meet) {
-      return res.status(404).json({ message: 'Meet not found' });
-    }
+    if (!meet) return res.status(404).json({ message: 'Meet not found' });
 
-    const payload = { meeting_data: meet, report_format, report_type };
-    if (report_interval) payload.report_interval = Number(report_interval);
+    const payload = {
+      meeting_data: meet,
+      report_format,
+      report_type,
+      report_interval: Number(report_interval)
+    };
 
-    // Call AI server để lấy report
-    const response = await fetch(AI_SERVER_URL + '/report', {
+    const response = await fetch(`${AI_SERVER_URL}/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
 
-    if (!response.ok) {
-      return res.status(response.status).json({ message: 'Failed to generate report', error: response.statusText });
-    }
+    if (!response.ok) throw new Error("AI Server error");
 
-    // Đọc toàn bộ dữ liệu về buffer
     const arrayBuffer = await response.arrayBuffer();
     const reportBuffer = Buffer.from(arrayBuffer);
 
-    // Gửi file về client
-    res.setHeader('Content-Disposition', response.headers.get('content-disposition') || `attachment; filename=report.${report_format}`);
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename=report.${report_format}`);
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.send(reportBuffer);
 
-    // Tạo transporter gửi mail
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      ignoreTLS: false,
       secure: false,
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        pass: process.env.EMAIL_PASS
       }
     });
 
-    // Gửi email cho từng email hợp lệ
-    for (const email of validEmails) {
-      try {
+    for (const email of emails || []) {
+      if (email.includes('@')) {
         await transporter.sendMail({
           from: process.env.EMAIL_USER,
           to: email,
           subject: `Your Report for ${meeting_title}`,
           text: 'Please find the attached report.',
-          attachments: [
-            {
-              filename: `report.${report_format}`,
-              content: reportBuffer,
-            }
-          ]
+          attachments: [{ filename: `report.${report_format}`, content: reportBuffer }]
         });
-        console.log(`Email sent to ${email}`);
-      } catch (emailError) {
-        console.error(`Failed to send email to ${email}:`, emailError);
       }
     }
-
-  } catch (error) {
-    console.error('Error in /api/get-report:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ message: 'Failed to generate report', error: error.message || error.toString() });
-    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Report error', error: err.message });
   }
 });
+
 app.get('/api/auto-enabled', checkAuth, async (req, res) => {
-  try {
-    const user = await User.findOne({email: req.user.email}); // Assuming req.user.id is populated by checkAuth middleware
-    res.json({ autoEnabled: user.autoEnabled });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching auto-enabled status' });
-  }
+  const user = await User.findOne({ email: req.user.email });
+  res.json({ autoEnabled: user?.autoEnabled || false });
 });
 
 app.post('/api/auto-enabled', checkAuth, async (req, res) => {
-  const { autoEnabled } = req.body;
-  
-  try {
-    const user = await User.findOne({email: req.user.email});
-    user.autoEnabled = autoEnabled;
-    await user.save();
-    res.status(200).json({ message: 'Auto-enabled status updated successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating auto-enabled status' });
-  }
+  const user = await User.findOne({ email: req.user.email });
+  user.autoEnabled = req.body.autoEnabled;
+  await user.save();
+  res.json({ message: 'Updated' });
 });
 
-app.use(express.static(path.join(__dirname, "../client/dist")));
+// Google OAuth routes
+app.get('/api/oauth/google', passport.authenticate("google", { scope: ["profile", "email"] }));
+app.get('/api/oauth/google/callback',
+  passport.authenticate("google", { session: false, failureRedirect: `${CLIENT_URL}/failed` }),
+  (req, res) => {
+    const token = jwt.sign({ email: req.user.email, name: req.user.name }, process.env.JWT_KEY, { expiresIn: '5d' });
+    res.cookie("token", token, { httpOnly: true, secure: false, maxAge: 5 * 86400000 });
+    res.redirect(`${CLIENT_URL}/success`);
+  }
+);
 
+app.get('/api/oauth/logout', (req, res) => {
+  res.clearCookie("token");
+  res.redirect(CLIENT_URL);
+});
+
+// Serve frontend
+app.use(express.static(path.join(__dirname, "../client/dist")));
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../client/dist/index.html"));
 });
 
-// Start the server
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
