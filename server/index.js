@@ -110,6 +110,48 @@ app.get('/api/meet', checkAuth, async (req, res) => {
     res.status(500).json({ message: "Error getting meetings", error: err.message });
   }
 });
+
+app.post('/api/get-report', checkAuth, async (req, res) => {
+  const { meeting_id, meeting_title, report_format, report_type, report_interval, emails } = req.body;
+
+  try {
+    const meet = await Meet.findById(meeting_id);
+    if (!meet) {
+      return res.status(404).json({ message: 'Meet not found' });
+    }
+
+    const payload = {
+      meeting_data: meet,
+      report_format,
+      report_type
+    };
+
+    if (report_interval) payload.report_interval = Number(report_interval);
+
+    const response = await fetch(process.env.AI_SERVER_URL + '/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      return res.status(500).json({ message: 'Failed to generate report', error: await response.text() });
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const reportBuffer = Buffer.from(arrayBuffer);
+
+    res.setHeader('Content-Disposition', `attachment; filename=report.${report_format}`);
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
+    res.send(reportBuffer);
+
+  } catch (error) {
+    console.error("Error in /api/get-report:", error);
+    res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+});
+
+
 // === LOGOUT ROUTE (optional) ===
 app.get('/api/logout', (req, res) => {
   res.clearCookie('token', {
